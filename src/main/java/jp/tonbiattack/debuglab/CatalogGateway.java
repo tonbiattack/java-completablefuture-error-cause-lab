@@ -1,6 +1,7 @@
 package jp.tonbiattack.debuglab;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 public final class CatalogGateway {
 
@@ -17,17 +18,24 @@ public final class CatalogGateway {
                         return LookupResult.found(fetchedSku);
                     }
 
-                    System.out.printf("observed_error_type=%s, cause_type=%s%n",
+                    Throwable domainCause = unwrapCompletionException(error);
+                    System.out.printf("observed_error_type=%s, domain_cause_type=%s%n",
                             error.getClass().getSimpleName(),
-                            error.getCause() == null ? "<none>"
-                                    : error.getCause().getClass().getSimpleName());
+                            domainCause.getClass().getSimpleName());
 
-                    if (error instanceof InventoryUnavailableException) {
-                        return LookupResult.retry(error);
+                    if (domainCause instanceof InventoryUnavailableException) {
+                        return LookupResult.retry(domainCause);
                     }
-                    return LookupResult.unknown(error);
+                    return LookupResult.unknown(domainCause);
                 });
 
         return result.join();
+    }
+
+    private Throwable unwrapCompletionException(Throwable error) {
+        if (error instanceof CompletionException && error.getCause() != null) {
+            return error.getCause();
+        }
+        return error;
     }
 }
